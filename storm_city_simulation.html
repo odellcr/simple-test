@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storm City - Living World Simulation</title>
+    <style>
+        :root {
+            --bg-main: #0a0c10;
+            --bg-panel: #13171f;
+            --bg-panel-hover: #1b212c;
+            --border-color: #2a3241;
+            --text-main: #d1d5db;
+            --text-muted: #8b949e;
+            
+            --accent-cyan: #00f0ff;
+            --accent-gold: #ffb400;
+            --accent-red: #ff3c3c;
+            --accent-green: #3fb950;
+            --accent-purple: #b366ff;
+            
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+
+        .title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+
+        .clock-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .clock {
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            color: var(--accent-gold);
+            background: rgba(255, 180, 0, 0.1);
+            padding: 5px 15px;
+            border-radius: 4px;
+            border: 1px solid var(--accent-gold);
+        }
+
+        .btn-restart {
+            background-color: transparent;
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-restart:hover {
+            background-color: rgba(255, 60, 60, 0.2);
+            box-shadow: 0 0 10px rgba(255, 60, 60, 0.4);
+        }
+
+        .layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 250px;
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding-top: 10px;
+        }
+
+        .nav-item {
+            padding: 15px 25px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.2s;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-item:hover {
+            background-color: var(--bg-panel-hover);
+            color: white;
+        }
+
+        .nav-item.active {
+            background-color: var(--bg-panel-hover);
+            border-left-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .stat-value {
+            font-family: var(--font-mono);
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background-color: #222;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 50%;
+            transition: width 0.5s ease, background-color 0.5s ease;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .action-card {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-title {
+            font-weight: bold;
+            color: var(--accent-gold);
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .action-desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+
+        .action-effects {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: #8b949e;
+            margin-bottom: 15px;
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .btn-action {
+            background-color: transparent;
+            color: white;
+            border: 1px solid var(--accent-cyan);
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn-action:hover {
+            background-color: rgba(0, 240, 255, 0.15);
+        }
+
+        .events-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .event-item {
+            background-color: rgba(255, 60, 60, 0.05);
+            border-left: 4px solid var(--accent-red);
+            padding: 15px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .event-title {
+            color: var(--accent-red);
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .history-log {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .log-entry {
+            background-color: var(--bg-panel);
+            padding: 10px;
+            border-left: 2px solid var(--border-color);
+        }
+        
+        .log-time {
+            color: var(--accent-gold);
+            margin-right: 10px;
+        }
+
+        /* Color helpers */
+        .color-good { color: var(--accent-green); }
+        .color-warn { color: var(--accent-gold); }
+        .color-bad { color: var(--accent-red); }
+        .color-neutral { color: var(--accent-cyan); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="title">Storm City</div>
+        <div class="clock-container">
+            <div class="clock" id="world-clock">Day 1 — Morning</div>
+            <button class="btn-restart" onclick="initGame()">REBOOT</button>
+        </div>
+    </header>
+
+    <div class="layout">
+        <div class="sidebar">
+            <div class="nav-item active" onclick="switchTab('tab-city')">👁️ City State</div>
+            <div class="nav-item" onclick="switchTab('tab-politics')">⚖️ Politics</div>
+            <div class="nav-item" onclick="switchTab('tab-adventure')">⚔️ Adventure</div>
+            <div class="nav-item" onclick="switchTab('tab-eye')">🌐 The Eye (IT)</div>
+            <div class="nav-item" onclick="switchTab('tab-factions')">👥 Factions</div>
+            <div class="nav-item" onclick="switchTab('tab-history')">📜 History</div>
+        </div>
+
+        <div class="main-content">
+            <!-- City State Tab -->
+            <div id="tab-city" class="tab-content active">
+                <div class="section-title">Active Events</div>
+                <div class="events-list" id="active-events-container">
+                    <!-- Events populated here -->
+                </div>
+
+                <div class="section-title">Core Systems Telemetry</div>
+                <div class="stats-grid" id="stats-container">
+                    <!-- Stats populated here -->
+                </div>
+            </div>
+
+            <!-- Politics Tab -->
+            <div id="tab-politics" class="tab-content">
+                <div class="section-title">Political Directives</div>
+                <p style="margin-bottom: 20px; color: var(--text-muted);">Manage the populace, trade, and overarching infrastructure. Your decisions here affect the fundamental stability of Storm City.</p>
+                <div class="actions-grid" id="actions-politics">
+                    <!-- Actions populated here -->
+                </div>
+            </div>
+
+            <!-- Adventure Tab -->
+            <div id="tab-adventure" class="tab-content">
+                <div class="section-title">Mercenary Contracts & Exploration</div>
+                <p style="margin-bottom: 20px; color: var(--text-muted);">Utilize freelance agents to solve acute problems, explore the clouds, and handle immediate threats.</p>
+                <div class="actions-grid" id="actions-adventure">
+                    <!-- Actions populated here -->
+                </div>
+            </div>
+
+            <!-- The Eye (IT) Tab -->
+            <div id="tab-eye" class="tab-content">
+                <div class="section-title">Infrastructure & Monitoring (The Eye)</div>
+                <p style="margin-bottom: 20px; color: var(--text-muted);">Manage the arcane-technological backbone. Patch networks, upgrade systems, and prevent cascading failures.</p>
+                <div class="actions-grid" id="actions-eye">
+                    <!-- Actions populated here -->
+                </div>
+            </div>
+
+            <!-- Factions Tab -->
+            <div id="tab-factions" class="tab-content">
+                <div class="section-title">Faction Relationships</div>
+                <div class="stats-grid" id="factions-container">
+                    <!-- Factions populated here -->
+                </div>
+            </div>
+
+            <!-- History Tab -->
+            <div id="tab-history" class="tab-content">
+                <div class="section-title">World Log</div>
+                <div class="history-log" id="history-container">
+                    <!-- History populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        
+        // Game State Structure
+        let state = {
+            day: 1,
+            timeOfDay: 0, // 0 = Morning, 1 = Afternoon
+            stats: {
+                population: 50,
+                food: 50,
+                treasury: 50,
+                trade: 50,
+                support: 50,
+                security: 50,
+                infrastructure: 50,
+                network: 50,
+                monitoring: 50,
+                backups: 50,
+                magic: 50,
+                blackSky: 50
+            },
+            factions: {
+                merchants: 50,
+                defenseForce: 50,
+                arcanists: 50
+            },
+            activeEvents: [],
+            history: []
+        };
+
+        // Stat display configurations
+        const statConfigs = {
+            population: { name: "Population", type: "neutral" },
+            food: { name: "Food Reserves", type: "good" },
+            treasury: { name: "Treasury", type: "good" },
+            trade: { name: "Trade Volume", type: "good" },
+            support: { name: "Public Support", type: "good" },
+            security: { name: "Security", type: "good" },
+            infrastructure: { name: "Infrastructure", type: "neutral" },
+            network: { name: "Network Reliability", type: "neutral" },
+            monitoring: { name: "Monitoring Systems", type: "neutral" },
+            backups: { name: "Backup Systems", type: "neutral" },
+            magic: { name: "Magic Stability", type: "good" },
+            blackSky: { name: "Black Sky Activity", type: "bad" } // Higher is worse
+        };
+
+        
+        // Potential events that can trigger if conditions are met
+        const eventLibrary = [
+            {
+                id: "food_shortage",
+                title: "Food Shortages",
+                desc: "Rations are running low. Citizens are growing desperate, leading to unrest.",
+                condition: (s) => s.stats.food < 30,
+                resolveCondition: (s) => s.stats.food >= 45,
+                effect: (s) => { s.stats.support -= 5; s.stats.security -= 2; },
+                triggerMsg: "Food shortages are causing panic in the lower districts.",
+                resolveMsg: "Food supplies have stabilized."
+            },
+            {
+                id: "network_outage",
+                title: "Arcane Network Outage",
+                desc: "Routing failures are disrupting communications and merchant ledgers.",
+                condition: (s) => s.stats.network < 35,
+                resolveCondition: (s) => s.stats.network >= 50,
+                effect: (s) => { s.stats.trade -= 5; s.factions.merchants -= 3; },
+                triggerMsg: "The Eye reports massive packet drops in the Arcane Network.",
+                resolveMsg: "Network routing has been restored to acceptable parameters."
+            },
+            {
+                id: "smugglers",
+                title: "Smuggling Ring Expansion",
+                desc: "Lax security has allowed black market operations to thrive, undercutting trade.",
+                condition: (s) => s.stats.security < 40 && s.stats.trade > 40,
+                resolveCondition: (s) => s.stats.security >= 55,
+                effect: (s) => { s.stats.treasury -= 3; s.stats.blackSky += 2; },
+                triggerMsg: "Reports of untaxed goods and dangerous artifacts flooding the markets.",
+                resolveMsg: "Patrols have successfully cracked down on major smuggling routes."
+            },
+            {
+                id: "portal_instability",
+                title: "Portal Fluctuations",
+                desc: "Unstable magical energies are causing physical damage to infrastructure.",
+                condition: (s) => s.stats.magic < 30,
+                resolveCondition: (s) => s.stats.magic >= 45,
+                effect: (s) => { s.stats.infrastructure -= 4; s.stats.blackSky += 3; },
+                triggerMsg: "Warning: High temporal variance detected near transport portals.",
+                resolveMsg: "Portal frequencies have been realigned."
+            },
+            {
+                id: "infrastructure_collapse",
+                title: "Crumbling Districts",
+                desc: "Physical infrastructure is failing, causing accidents and destroying nodes.",
+                condition: (s) => s.stats.infrastructure < 30,
+                resolveCondition: (s) => s.stats.infrastructure >= 45,
+                effect: (s) => { s.stats.network -= 4; s.stats.support -= 3; },
+                triggerMsg: "A bridge collapsed in the Middle Ring, severing network trunks.",
+                resolveMsg: "Emergency repairs on critical infrastructure completed."
+            }
+        ];
+
+
+        const actions = {
+            politics: [
+                {
+                    name: "Emergency Rations",
+                    desc: "Dip into treasury funds to buy and distribute food imports.",
+                    costText: "Cost: Treasury | Effect: +Food, +Support",
+                    execute: () => { 
+                        modStat('treasury', -10); 
+                        modStat('food', 20); 
+                        modStat('support', 5); 
+                        logAction("Purchased emergency food imports.");
+                    }
+                },
+                {
+                    name: "Fund Defense Force",
+                    desc: "Increase budget for city patrols and gate security.",
+                    costText: "Cost: Treasury | Effect: +Security, +Defense Faction",
+                    execute: () => {
+                        modStat('treasury', -15);
+                        modStat('security', 15);
+                        modFaction('defenseForce', 10);
+                        logAction("Increased funding for the Defense Force.");
+                    }
+                },
+                {
+                    name: "Tax Merchants",
+                    desc: "Enforce strict tax collection to refill the treasury.",
+                    costText: "Cost: Trade, Merchant Favor | Effect: ++Treasury",
+                    execute: () => {
+                        modStat('trade', -10);
+                        modFaction('merchants', -15);
+                        modStat('treasury', 25);
+                        logAction("Enforced strict tax collections on merchant guilds.");
+                    }
+                },
+                {
+                    name: "Public Reassurance",
+                    desc: "Hold a public address to calm the populace.",
+                    costText: "Cost: Time | Effect: +Support",
+                    execute: () => {
+                        modStat('support', 10);
+                        logAction("Held a public rally to reassure the citizens.");
+                    }
+                }
+            ],
+            adventure: [
+                {
+                    name: "Contract: Clear Outlaws",
+                    desc: "Hire freelancers to violently dismantle criminal elements.",
+                    costText: "Cost: Treasury | Effect: +Security, -Black Sky",
+                    execute: () => {
+                        modStat('treasury', -5);
+                        modStat('security', 10);
+                        modStat('blackSky', -10);
+                        logAction("Mercenaries successfully raided a criminal stronghold.");
+                    }
+                },
+                {
+                    name: "Contract: Investigate Anomalies",
+                    desc: "Send Arcanists into unstable zones to gather data and stabilize magic.",
+                    costText: "Cost: Treasury | Effect: +Magic, +Arcanist Favor",
+                    execute: () => {
+                        modStat('treasury', -5);
+                        modStat('magic', 15);
+                        modFaction('arcanists', 10);
+                        logAction("Adventurers returned with data, stabilizing local magic fields.");
+                    }
+                },
+                {
+                    name: "Contract: Escort Caravans",
+                    desc: "Provide armed escorts for vital trade routes.",
+                    costText: "Cost: None | Effect: +Trade, +Food",
+                    execute: () => {
+                        modStat('trade', 10);
+                        modStat('food', 5);
+                        logAction("Caravans arrived safely under mercenary protection.");
+                    }
+                }
+            ],
+            eye: [
+                {
+                    name: "Patch Arcane Routing",
+                    desc: "Deploy fixes to the city's network infrastructure.",
+                    costText: "Cost: Time | Effect: +Network",
+                    execute: () => {
+                        modStat('network', 15);
+                        logAction("Deployed patches to the Arcane Routing tables.");
+                    }
+                },
+                {
+                    name: "Expand Node Infrastructure",
+                    desc: "Build new physical relay points to handle increased load.",
+                    costText: "Cost: Treasury | Effect: +Infrastructure",
+                    execute: () => {
+                        modStat('treasury', -10);
+                        modStat('infrastructure', 15);
+                        logAction("Commissioned construction of new network relay nodes.");
+                    }
+                },
+                {
+                    name: "Deploy Deep Monitoring",
+                    desc: "Install scrying wards to detect issues before they cascade.",
+                    costText: "Cost: Treasury | Effect: +Monitoring",
+                    execute: () => {
+                        modStat('treasury', -15);
+                        modStat('monitoring', 20);
+                        logAction("Installed deep scrying wards. The Eye sees further.");
+                    }
+                },
+                {
+                    name: "System Snapshots",
+                    desc: "Force a manual backup of city registry and magical state.",
+                    costText: "Cost: Network | Effect: +Backups",
+                    execute: () => {
+                        modStat('network', -5); // Takes bandwidth
+                        modStat('backups', 25);
+                        logAction("Initiated global system snapshots. Bandwidth temporarily reduced.");
+                    }
+                }
+            ]
+        };
+
+
+        function initGame() {
+            // Randomize starting state
+            Object.keys(state.stats).forEach(key => {
+                state.stats[key] = Math.floor(Math.random() * 50) + 25; // 25 to 75
+            });
+            Object.keys(state.factions).forEach(key => {
+                state.factions[key] = Math.floor(Math.random() * 40) + 30; // 30 to 70
+            });
+            
+            state.day = 1;
+            state.timeOfDay = 0;
+            state.activeEvents = [];
+            state.history = [];
+
+            logHistory("System rebooted. The Eye is online. Welcome to Storm City.", "neutral");
+            buildUI();
+            updateUI();
+        }
+
+        function buildUI() {
+            // Build Actions
+            buildActionList('actions-politics', actions.politics);
+            buildActionList('actions-adventure', actions.adventure);
+            buildActionList('actions-eye', actions.eye);
+        }
+
+        function buildActionList(containerId, actionList) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            actionList.forEach(act => {
+                const card = document.createElement('div');
+                card.className = 'action-card';
+                card.innerHTML = `
+                    <div>
+                        <div class="action-title">${act.name}</div>
+                        <div class="action-desc">${act.desc}</div>
+                        <div class="action-effects">${act.costText}</div>
+                    </div>
+                    <button class="btn-action" onclick="performAction('${containerId}', '${act.name}')">Execute</button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function switchTab(tabId) {
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            // Update tab contents
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+
+
+        function modStat(statName, amount) {
+            state.stats[statName] = Math.max(0, Math.min(100, state.stats[statName] + amount));
+        }
+
+        function modFaction(factionName, amount) {
+            state.factions[factionName] = Math.max(0, Math.min(100, state.factions[factionName] + amount));
+        }
+
+        function performAction(category, actionName) {
+            // Find the action
+            let actList;
+            if(category === 'actions-politics') actList = actions.politics;
+            if(category === 'actions-adventure') actList = actions.adventure;
+            if(category === 'actions-eye') actList = actions.eye;
+
+            const action = actList.find(a => a.name === actionName);
+            if (action) {
+                action.execute();
+                advanceTime();
+            }
+        }
+
+
+        function advanceTime() {
+            // 1. Advance Clock
+            state.timeOfDay++;
+            if (state.timeOfDay > 1) {
+                state.timeOfDay = 0;
+                state.day++;
+            }
+
+            // 2. Run Interconnected Simulation Logic
+            runSimulationDynamics();
+
+            // 3. Process Events
+            processEvents();
+
+            // 4. Update UI
+            updateUI();
+        }
+
+        function runSimulationDynamics() {
+            // The hidden relationships. Changes are small per half-day.
+            let s = state.stats;
+
+            // Population consumes food
+            if (s.population > s.food + 20) modStat('food', -2);
+            
+            // Trade brings money, but requires network and security
+            if (s.network > 60 && s.security > 50) modStat('trade', 2);
+            if (s.trade > 60) modStat('treasury', 2);
+            
+            // Low infrastructure degrades network
+            if (s.infrastructure < 40) modStat('network', -2);
+            
+            // High black sky degrades magic
+            if (s.blackSky > 60) modStat('magic', -2);
+
+            // Low security degrades public support
+            if (s.security < 40) modStat('support', -2);
+
+            // Backups decay over time if not refreshed (representing data staleness)
+            modStat('backups', -1);
+            
+            // Monitoring mitigates Black Sky slowly if high
+            if (s.monitoring > 70) modStat('blackSky', -1);
+        }
+
+
+        function processEvents() {
+            // Check for resolving existing events
+            for (let i = state.activeEvents.length - 1; i >= 0; i--) {
+                let ev = state.activeEvents[i];
+                let libEv = eventLibrary.find(e => e.id === ev.id);
+                if (libEv.resolveCondition(state)) {
+                    logHistory(`RESOLVED: ${libEv.resolveMsg}`, "good");
+                    state.activeEvents.splice(i, 1);
+                } else {
+                    // Apply ongoing negative effects if not resolved
+                    libEv.effect(state);
+                }
+            }
+
+            // Check for triggering new events
+            eventLibrary.forEach(libEv => {
+                if (libEv.condition(state) && !state.activeEvents.some(e => e.id === libEv.id)) {
+                    // Only trigger if monitoring fails to catch it early (RNG based on monitoring stat)
+                    let catchChance = state.stats.monitoring;
+                    let roll = Math.random() * 100;
+                    
+                    if (roll > catchChance) {
+                        state.activeEvents.push({ id: libEv.id, duration: 0 });
+                        logHistory(`WARNING: ${libEv.triggerMsg}`, "bad");
+                    } else {
+                        // Caught early!
+                        logHistory(`Monitoring prevented an incident: ${libEv.title}.`, "good");
+                    }
+                }
+            });
+        }
+
+        function logAction(msg) {
+            logHistory(`Action Executed: ${msg}`, "neutral");
+        }
+
+        function logHistory(msg, type = "neutral") {
+            const timeStr = `Day ${state.day} - ${state.timeOfDay === 0 ? 'Morning' : 'Afternoon'}`;
+            state.history.unshift({ time: timeStr, msg: msg, type: type });
+            if (state.history.length > 50) state.history.pop(); // keep last 50
+        }
+
+
+        function updateUI() {
+            // Clock
+            document.getElementById('world-clock').innerText = `Day ${state.day} — ${state.timeOfDay === 0 ? 'Morning' : 'Afternoon'}`;
+
+            // Stats
+            const statsContainer = document.getElementById('stats-container');
+            statsContainer.innerHTML = '';
+            for (let [key, config] of Object.entries(statConfigs)) {
+                let val = state.stats[key];
+                let colorClass = getStatColorClass(val, config.type);
+                
+                let card = document.createElement('div');
+                card.className = 'stat-card';
+                
+                // Determine bar color dynamically
+                let barColor = val > 75 ? 'var(--accent-green)' : (val > 35 ? 'var(--accent-cyan)' : 'var(--accent-red)');
+                if(config.type === 'bad') {
+                    barColor = val < 25 ? 'var(--accent-green)' : (val < 65 ? 'var(--accent-gold)' : 'var(--accent-red)');
+                }
+
+                card.innerHTML = `
+                    <div class="stat-header">
+                        <span>${config.name}</span>
+                        <span class="stat-value ${colorClass}">${Math.floor(val)}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${val}%; background-color: ${barColor};"></div>
+                    </div>
+                `;
+                statsContainer.appendChild(card);
+            }
+
+            // Factions
+            const factionsContainer = document.getElementById('factions-container');
+            factionsContainer.innerHTML = '';
+            const factionNames = { merchants: "Merchant Guilds", defenseForce: "Defense Force", arcanists: "Free Arcanists" };
+            for (let [key, val] of Object.entries(state.factions)) {
+                let card = document.createElement('div');
+                card.className = 'stat-card';
+                let barColor = val > 60 ? 'var(--accent-green)' : (val > 40 ? 'var(--accent-cyan)' : 'var(--accent-red)');
+                card.innerHTML = `
+                    <div class="stat-header">
+                        <span>${factionNames[key]}</span>
+                        <span class="stat-value">${Math.floor(val)}</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${val}%; background-color: ${barColor};"></div>
+                    </div>
+                `;
+                factionsContainer.appendChild(card);
+            }
+
+            // Events
+            const eventsContainer = document.getElementById('active-events-container');
+            eventsContainer.innerHTML = '';
+            if (state.activeEvents.length === 0) {
+                eventsContainer.innerHTML = `<div style="color: var(--text-muted); font-style: italic;">No critical active events. Simulation stable.</div>`;
+            } else {
+                state.activeEvents.forEach(ev => {
+                    let libEv = eventLibrary.find(e => e.id === ev.id);
+                    let item = document.createElement('div');
+                    item.className = 'event-item';
+                    item.innerHTML = `
+                        <div class="event-title">⚠️ ${libEv.title}</div>
+                        <div style="font-size: 0.9rem;">${libEv.desc}</div>
+                    `;
+                    eventsContainer.appendChild(item);
+                });
+            }
+
+            // History
+            const historyContainer = document.getElementById('history-container');
+            historyContainer.innerHTML = '';
+            state.history.forEach(entry => {
+                let div = document.createElement('div');
+                div.className = 'log-entry';
+                let colorClass = entry.type === 'good' ? 'color-good' : (entry.type === 'bad' ? 'color-bad' : 'color-neutral');
+                div.innerHTML = `<span class="log-time">[${entry.time}]</span> <span class="${colorClass}">${entry.msg}</span>`;
+                historyContainer.appendChild(div);
+            });
+        }
+
+        function getStatColorClass(val, type) {
+            if (type === 'good') {
+                if (val >= 70) return 'color-good';
+                if (val <= 30) return 'color-bad';
+            } else if (type === 'bad') {
+                if (val >= 70) return 'color-bad';
+                if (val <= 30) return 'color-good';
+            } else {
+                if (val <= 20) return 'color-bad';
+            }
+            return '';
+        }
+
+        // Start game on load
+        window.onload = initGame;
+    </script>
+</body>
+</html>
