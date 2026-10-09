@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cloud City — C&C Operations</title>
+<style>
+:root{color-scheme:dark;--bg:#101722;--panel:#192433;--panel2:#202f41;--line:#34475d;--text:#edf3fa;--muted:#a8b7c9;--accent:#8bc5ff;--good:#8ed6ad;--warn:#ffd28a;--bad:#ff9c9c}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#101722,#152337 55%,#101722);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:24px max(18px,calc((100% - 1100px)/2));border-bottom:1px solid var(--line);background:#101722dd}
+.eyebrow{font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:clamp(1.8rem,5vw,2.7rem);line-height:1.1;margin:.35rem 0}.sub{color:var(--muted);max-width:750px;margin:0}
+main{max-width:1100px;margin:auto;padding:20px 16px 50px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.stat,.panel,.event,.choice{border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.stat{padding:12px}.stat span{display:block;color:var(--muted);font-size:.78rem}.stat strong{font-size:1.25rem}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.tab,button{font:inherit;border:1px solid var(--line);border-radius:9px;padding:9px 13px;background:var(--panel2);color:var(--text);cursor:pointer}
+.tab[aria-selected=true]{background:#244a70;border-color:var(--accent);color:white}
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,.8fr);gap:16px;align-items:start}
+.panel{padding:17px;margin-bottom:14px}.panel h2{font-size:1.15rem;margin:0 0 8px}.panel h3{font-size:1rem;margin:16px 0 6px}.muted{color:var(--muted)}.small{font-size:.88rem}
+.event{padding:15px;margin:10px 0;background:linear-gradient(120deg,#202f41,#192433)}.event h3{margin:0 0 5px}.tag{display:inline-block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:5px}
+.choices{display:grid;gap:8px;margin-top:12px}.choice{text-align:left;padding:12px}.choice:hover,button:hover,.tab:hover{border-color:var(--accent)}.choice strong{display:block;margin-bottom:3px}.choice span{display:block;color:var(--muted);font-size:.9rem}
+button.primary{background:#244a70;border-color:var(--accent)}button.danger{border-color:#875151}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+ul{padding-left:20px;margin:8px 0}.log-item{border-top:1px solid var(--line);padding:10px 0}.log-item:first-child{border-top:0}.pill{font-size:.75rem;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted)}
+.bar{height:7px;background:#0e151e;border-radius:99px;overflow:hidden;margin:6px 0 12px}.bar i{display:block;height:100%;background:var(--accent)}
+.hidden{display:none!important}
+footer{color:var(--muted);font-size:.8rem;text-align:center;margin-top:24px}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}header{padding:20px 16px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Persistent world simulation · single-file edition</div>
+  <h1>Cloud City</h1>
+  <p class="sub">Crown & Cloud Trading operates in a nowhere realm between planes. Run the outpost, solve IT problems, respond to adventurers, and navigate the city. All modes share one calendar and one world state.</p>
+</header>
+<main>
+  <div class="stats" id="stats"></div>
+  <div class="panel">
+    <div class="eyebrow">World clock</div>
+    <h2 id="dateLine">Day 1 · First Span</h2>
+    <p id="worldSummary" class="muted small"></p>
+    <div class="actions">
+      <button id="nextDay" class="primary">End day → advance world</button>
+      <button id="saveBtn">Save now</button>
+      <button id="resetBtn" class="danger">New randomized run</button>
+    </div>
+    <p class="small muted">Changing modes does not advance time. Most actions take part of a workday; ending the day advances all background systems together.</p>
+  </div>
+  <nav class="tabs" aria-label="Game modes">
+    <button class="tab" data-mode="it" aria-selected="true">IT Operations</button>
+    <button class="tab" data-mode="adventure" aria-selected="false">Adventures</button>
+    <button class="tab" data-mode="politics" aria-selected="false">Politics & Trade</button>
+  </nav>
+  <div class="layout">
+    <section>
+      <div id="modeContent"></div>
+    </section>
+    <aside>
+      <div class="panel">
+        <h2>Current world state</h2>
+        <div id="worldState"></div>
+      </div>
+      <div class="panel">
+        <h2>Recent events</h2>
+        <div id="eventLog"></div>
+      </div>
+      <div class="panel">
+        <h2>How this simulation works</h2>
+        <ul class="small muted">
+          <li>Events are selected randomly from weighted pools and varied by the current state.</li>
+          <li>Choices change resources and can create follow-on events.</li>
+          <li>IT, adventure, and political events can overlap on the same day.</li>
+          <li>The browser saves progress locally. GitHub Pages hosts the app but does not sync saves between devices.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+  <footer>Cloud City prototype · progress is stored in this browser</footer>
+</main>
+<script>
+(() => {
+'use strict';
+const SAVE_KEY='cloudCityRun_v1';
+const $=id=>document.getElementById(id);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const chance=p=>Math.random()<p;
+const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
+const fmt=n=>n.toLocaleString();
+let mode='it', game;
+
+const itemPools={
+ it:[
+  {title:'The inventory terminal is crawling',body:'Warehouse staff report delays when looking up stored magic items. The server is healthy, but the database is under pressure.',choices:[
+   {label:'Profile queries and tune the database',detail:'Takes time; improves reliability without buying hardware.',fx:{reliability:5,techDebt:-2,cash:-2},result:'Query latency improves. You document the bottleneck and reduce some technical debt.'},
+   {label:'Buy a larger server immediately',detail:'Fast capacity increase, but costs money and may not fix the root cause.',fx:{reliability:3,cash:-12,techDebt:2},result:'The service gets breathing room. The underlying query problem remains.'},
+   {label:'Ask staff to work around the delay',detail:'No immediate spend; frustration and operational risk increase.',fx:{reputation:-3,reliability:-4},result:'Work continues, but staff lose confidence in the system.'}]},
+  {title:'A suspicious sign-in',body:'The identity logs show repeated failed sign-ins to the item valuation system from an unfamiliar portal endpoint.',choices:[
+   {label:'Investigate logs and tighten sign-in controls',detail:'A measured response with moderate effort.',fx:{security:6,techDebt:-1,cash:-2},result:'You block the source and add a conditional access rule. The incident remains under review.'},
+   {label:'Disable external access temporarily',detail:'Safer in the short term; disrupts legitimate work.',fx:{security:8,reputation:-3,reliability:-2},result:'The attack path is closed, but remote appraisers cannot work until access is restored.'},
+   {label:'Ignore it unless access succeeds',detail:'Preserves convenience but accepts risk.',fx:{security:-8,reputation:1},result:'No breach is confirmed, but the suspicious activity continues.'}]},
+  {title:'A remote clerk needs access',body:'A C&C clerk stationed on a nearby cloud-island needs secure access to the inventory and sales systems.',choices:[
+   {label:'Use the existing site-to-site VPN pattern',detail:'Familiar and supportable; adds another remote dependency.',fx:{reliability:3,security:2,cash:-5,techDebt:1},result:'The site comes online using the known pattern. You record the new dependency.'},
+   {label:'Provide app-level access through identity controls',detail:'More targeted access; takes longer to design and test.',fx:{security:5,techDebt:-1,cash:-4},result:'The clerk receives only the applications required for the role.'},
+   {label:'Send files by enchanted courier for now',detail:'Temporary workaround with manual effort and delay.',fx:{reputation:-1,techDebt:2,cash:-1},result:'Work can proceed, but the manual process creates reconciliation risk.'}]},
+  {title:'Backup verification failed',body:'Last night’s backup job reported success, but a test restore could not open one of the inventory indexes.',choices:[
+   {label:'Pause risky changes and run a restore test',detail:'Spends time now to understand recovery capability.',fx:{reliability:4,security:1,cash:-2,techDebt:-3},result:'You identify and repair a backup configuration issue before a real outage.'},
+   {label:'Run the backup again and move on',detail:'Quick, but does not prove recoverability.',fx:{reliability:1,techDebt:2,cash:-1},result:'A fresh backup completes. Restore confidence remains uncertain.'},
+   {label:'Purchase a separate backup target',detail:'Adds resilience and ongoing cost.',fx:{reliability:7,cash:-10,techDebt:-1},result:'A separate target is provisioned. Recovery options improve.'}]},
+  {title:'The portal gateway is nearing capacity',body:'A burst of trade traffic is consuming most of the gateway’s available connection capacity.',choices:[
+   {label:'Measure traffic and set sensible limits',detail:'Low cost; requires analysis and monitoring.',fx:{reliability:4,techDebt:-2,cash:-2},result:'You identify a noisy integration and limit its connection rate.'},
+   {label:'Add another gateway node',detail:'More capacity, with extra operational complexity.',fx:{reliability:7,cash:-11,techDebt:2},result:'Capacity increases, but the new node must be included in patching and monitoring.'},
+   {label:'Wait for the surge to pass',detail:'No immediate cost, but service may degrade.',fx:{reliability:-6,reputation:-2},result:'The surge eventually subsides after several slow periods.'}]},
+  {title:'An employee installed an unapproved scrying utility',body:'A warehouse employee installed a magical monitoring utility that requests broad access to inventory records.',choices:[
+   {label:'Isolate it, review permissions, and approve only what is needed',detail:'Balances security and business continuity.',fx:{security:5,techDebt:-2,reputation:1,cash:-2},result:'The utility is contained and receives a restricted test environment.'},
+   {label:'Ban the tool and remove it',detail:'Simple policy enforcement; may frustrate the team.',fx:{security:4,reputation:-2,techDebt:-1},result:'The tool is removed and staff are reminded of the approval process.'},
+   {label:'Allow it because the employee finds it useful',detail:'Convenient, but creates unmanaged access risk.',fx:{security:-7,techDebt:3,reputation:2},result:'The employee saves time, while an unreviewed integration remains in production.'}]}
+ ],
+ adventure:[
+  {title:'A party brings a cursed signet',body:'Three adventurers arrive with a signet ring that whispers the name of a forgotten deity. They want C&C to appraise it and store it overnight.',choices:[
+   {label:'Appraise it and secure it in isolation',detail:'Costs staff time; reduces the chance of an incident.',fx:{cash:5,reputation:3,security:2},result:'The ring is isolated and appraised. C&C earns a fee and the party leaves satisfied.'},
+   {label:'Buy it at a cautious discount',detail:'Potential profit, but C&C assumes the risk.',fx:{cash:-4,reputation:1,security:-3},result:'The party accepts. The ring enters inventory with a warning attached.'},
+   {label:'Decline and refer them to a temple',detail:'Low risk; gives up the sale.',fx:{reputation:-1,security:1},result:'The party takes the ring to a local temple instead.'}]},
+  {title:'A courier arrives from another plane',body:'A courier offers a crate of common healing potions and two unidentified wondrous items. The paperwork is incomplete.',choices:[
+   {label:'Verify provenance before accepting',detail:'Slower, but protects inventory records.',fx:{cash:3,reputation:2,techDebt:-1},result:'One item is accepted after verification; the rest are held pending paperwork.'},
+   {label:'Accept the whole crate on consignment',detail:'More potential sales; more inventory risk.',fx:{cash:7,reputation:1,security:-2,techDebt:2},result:'The goods arrive. Inventory reconciliation will take additional work.'},
+   {label:'Reject the shipment',detail:'Avoids uncertainty but loses a supplier opportunity.',fx:{reputation:-1},result:'The courier leaves and offers no guarantee of returning.'}]},
+  {title:'An adventurer disputes an appraisal',body:'A well-known adventurer claims C&C undervalued a +1 weapon and threatens to take their business elsewhere.',choices:[
+   {label:'Arrange an independent second appraisal',detail:'Costs a little; builds trust in the process.',fx:{cash:-2,reputation:5},result:'A second appraiser explains the valuation and resolves the dispute.'},
+   {label:'Offer a small commercial credit',detail:'Preserves the relationship but costs margin.',fx:{cash:-5,reputation:3},result:'The adventurer accepts a credit and agrees to return.'},
+   {label:'Stand by the original valuation',detail:'Protects margin, risks reputation.',fx:{cash:2,reputation:-5},result:'The appraisal stands. The adventurer leaves unhappy.'}]},
+  {title:'A map points toward a drifting vault',body:'A party asks C&C to sponsor an expedition to a vault drifting near a planar seam. They offer a share of recovered goods.',choices:[
+   {label:'Fund a small, carefully scoped expedition',detail:'Potential reward with a real chance of loss.',fx:{cash:-6,reputation:4},result:'The party departs. Their report will arrive after several days.'},
+   {label:'Offer equipment on consignment',detail:'Limits cash exposure but puts stock at risk.',fx:{cash:-2,reputation:2,security:-1},result:'The party leaves with loaned gear and a signed inventory list.'},
+   {label:'Decline until the route is verified',detail:'Conservative choice; no immediate gain.',fx:{reputation:-1,security:1},result:'The party seeks another sponsor.'}]}
+ ],
+ politics:[
+  {title:'The market council debates a storage levy',body:'Council members propose a fee on businesses storing dangerous or cursed items within city limits.',choices:[
+   {label:'Support a risk-based fee with clear standards',detail:'May improve legitimacy while adding compliance work.',fx:{reputation:3,cash:-3,security:2},result:'C&C supports the proposal and requests consistent inspection criteria.'},
+   {label:'Lobby against the levy',detail:'Protects margins; risks looking self-interested.',fx:{cash:-2,reputation:-2},result:'The debate becomes more contentious. No decision is final yet.'},
+   {label:'Offer C&C as a pilot inspection partner',detail:'Creates influence and operational obligations.',fx:{cash:-4,reputation:4,security:2},result:'Officials agree to discuss a limited pilot with C&C.'}]},
+  {title:'A rival firm is testing the market',body:'A distant trading company, Meridian Reliquary, has sent a representative to survey merchants and offer lower appraisal fees.',choices:[
+   {label:'Compete on trusted records and secure custody',detail:'Invests in service quality rather than a price war.',fx:{cash:-4,reputation:4,security:2},result:'Several merchants agree that reliable custody matters more than the lowest fee.'},
+   {label:'Match their fees for a limited period',detail:'May retain customers at the cost of margin.',fx:{cash:-7,reputation:2},result:'Customers notice the discount, but the margin squeeze is real.'},
+   {label:'Ignore them and focus on current customers',detail:'Avoids distraction; gives the rival room to grow.',fx:{reputation:-3,cash:1},result:'Meridian continues meeting merchants without a C&C response.'}]},
+  {title:'A temple requests a civic partnership',body:'A local temple aligned with a recognized D&D deity asks merchants to help fund relief for travelers displaced by a planar disturbance.',choices:[
+   {label:'Contribute goods and a modest donation',detail:'Costs resources but builds civic trust.',fx:{cash:-4,reputation:5},result:'C&C supplies basic goods and gains goodwill among travelers.'},
+   {label:'Offer secure storage for donated items',detail:'Uses company capability instead of direct spending.',fx:{security:2,reputation:3,techDebt:1},result:'C&C becomes a temporary custodian for relief supplies.'},
+   {label:'Decline and keep resources for operations',detail:'Preserves budget; sacrifices goodwill.',fx:{cash:1,reputation:-3},result:'The temple thanks C&C politely and approaches other merchants.'}]}
+ ]
+};
+
+function initialState(){
+ const seed=Math.floor(Math.random()*900000+100000);
+ return {seed,day:1,span:pick(['First Span','High Drift','Gale Turn','Quiet Reach']),cash:120,reputation:50,security:58,reliability:62,techDebt:28,market:pick(['steady','tight supply','busy','uncertain']),government:pick(['merchant council','guild compact','chartered magistrate']),deity:pick(['Oghma','Waukeen','Mystra','Gond','Tymora']),rival:pick(['Meridian Reliquary','The Gilded Compass','Astral Exchange']),inventory:8,actionsToday:0,doneToday:[],active:{it:null,adventure:null,politics:null},log:[],nextAdventure:2+Math.floor(Math.random()*3),nextPolitics:4+Math.floor(Math.random()*5),nextIT:1,expeditionReturn:null,flags:[],lastDayEvent:''};
+}
+function log(msg,type='World'){game.log.unshift({day:game.day,type,msg});game.log=game.log.slice(0,14)}
+function addFx(fx){for(const [k,v] of Object.entries(fx)){if(typeof game[k]==='number')game[k]+=v}game.cash=Math.max(0,game.cash);game.reputation=clamp(game.reputation,0,100);game.security=clamp(game.security,0,100);game.reliability=clamp(game.reliability,0,100);game.techDebt=clamp(game.techDebt,0,100)}
+function createEvent(type,force=false){
+ if(game.active[type]&&!force)return;
+ const pool=itemPools[type];
+ let event=pick(pool);
+ // State-aware variation: the same pool responds differently to a struggling operation.
+ if(type==='it'&&game.reliability<45)event={...event,title:pick(['Urgent service degradation','A business-critical service is unstable','Operations reports a recurring failure']),body:'Service metrics are below the company target. Staff need a clear decision before the problem spreads.',choices:[
+  {label:'Run a focused incident review',detail:'Identify cause and reduce recurrence.',fx:{reliability:7,techDebt:-3,cash:-3},result:'The team isolates the main failure mode and documents a corrective action.'},
+  {label:'Apply a quick workaround',detail:'Restores some service but adds debt.',fx:{reliability:3,techDebt:5,cash:-1},result:'Service improves for now, but the workaround needs follow-up.'},
+  {label:'Accept degraded service for today',detail:'Preserves resources; business impact continues.',fx:{reliability:-5,reputation:-4},result:'The issue remains open and customers notice the delay.'}]};
+ game.active[type]={...event,type,created:game.day,id:Math.random().toString(36).slice(2,9)};
+}
+function ensureEvents(){
+ if(!game.active.it)createEvent('it');
+ if(game.day>=game.nextAdventure&&!game.active.adventure){createEvent('adventure');game.nextAdventure=game.day+3+Math.floor(Math.random()*4)}
+ if(game.day>=game.nextPolitics&&!game.active.politics){createEvent('politics');game.nextPolitics=game.day+5+Math.floor(Math.random()*6)}
+ if(game.expeditionReturn&&game.day>=game.expeditionReturn.day){game.cash+=game.expeditionReturn.cash;game.reputation=clamp(game.reputation+game.expeditionReturn.rep,0,100);log(game.expeditionReturn.msg,'Adventure');game.expeditionReturn=null}
+}
+function applyChoice(type,index){
+ const e=game.active[type];if(!e)return;
+ const c=e.choices[index];if(!c)return;
+ addFx(c.fx||{});log(c.result,type==='it'?'IT':type==='adventure'?'Adventure':'Politics');
+ if(type==='adventure'&&e.title.includes('drifting vault')&&index===0&&chance(.55)){game.expeditionReturn={day:game.day+3+Math.floor(Math.random()*3),cash:12+Math.floor(Math.random()*12),rep:chance(.7)?4:-3,msg:chance(.7)?'The expedition returns with saleable relics and a useful route report.':'The expedition returns late with little to sell; the route is still poorly understood.'};log('An expedition report is expected in several days.','Adventure')}
+ game.active[type]=null;game.actionsToday++;game.doneToday.push(type);
+ if(type==='it'){game.nextIT=game.day+1}
+ save(false);render();
+}
+function advanceDay(){
+ game.day++;game.actionsToday=0;game.doneToday=[];
+ // Every system advances on the same clock.
+ const upkeep=4+(game.techDebt>60?2:0);
+ game.cash=Math.max(0,game.cash-upkeep);
+ if(game.day%3===0){game.reliability=clamp(game.reliability+(game.techDebt>65?-3:1),0,100)}
+ if(game.day%4===0&&game.security<35){log('A routine audit finds an unresolved security weakness.','IT');game.reputation=clamp(game.reputation-2,0,100)}
+ if(game.market==='tight supply'&&chance(.45)){game.cash=Math.max(0,game.cash-2);log('A supply shortage raises procurement costs.','Trade')}
+ if(chance(.12)){game.market=pick(['steady','tight supply','busy','uncertain']);log('Market conditions shift: '+game.market+'.','Trade')}
+ if(game.cash<25&&chance(.45)){log('Finance warns that the operating reserve is running low.','Company')}
+ if(game.reputation<30&&chance(.35)){log('A merchant chooses a competitor after hearing complaints about C&C.','Trade');game.cash=Math.max(0,game.cash-3)}
+ if(game.security<25&&chance(.22)){log('A minor security incident exposes internal item records.','IT');game.reputation=clamp(game.reputation-5,0,100);game.techDebt=clamp(game.techDebt+3,0,100)}
+ if(game.day%7===0){game.span=pick(['First Span','High Drift','Gale Turn','Quiet Reach']);log('A new trading week begins.','World')}
+ ensureEvents();
+ if(!game.active.it)createEvent('it');
+ log('Day '+game.day+' begins. Daily operating costs: '+upkeep+' crowns.','World');
+ save(false);render();
+}
+function save(show=true){try{localStorage.setItem(SAVE_KEY,JSON.stringify(game));if(show)log('Progress saved in this browser.','System')}catch(e){if(show)alert('Could not save in this browser.')}} 
+function load(){try{const s=localStorage.getItem(SAVE_KEY);if(s){game=JSON.parse(s);if(!game.active)game.active={it:null,adventure:null,politics:null};ensureEvents();return true}}catch(e){}return false}
+function reset(){if(!confirm('Start a new randomized run? The current local save will be replaced.'))return;game=initialState();log('New run generated. The city, deity, market conditions, event schedule, and event choices are randomized.');ensureEvents();save(false);render()}
+function modeTitle(){return {it:'IT Operations',adventure:'Adventures',politics:'Politics & Trade'}[mode]}
+function renderStats(){
+ const stats=[['Treasury',game.cash+' crowns'],['Reputation',game.reputation+'/100'],['Security',game.security+'/100'],['Service reliability',game.reliability+'/100']];
+ $('stats').innerHTML=stats.map(([l,v])=>`<div class="stat"><span>${l}</span><strong>${v}</strong></div>`).join('');
+ $('dateLine').textContent=`Day ${game.day} · ${game.span}`;
+ $('worldSummary').textContent=`C&C is operating under a ${game.government}. The local temple honors ${game.deity}; market conditions are ${game.market}. Meridian competitor: ${game.rival}.`;
+}
+function renderMode(){
+ const e=game.active[mode];
+ let intro=mode==='it'?'Keep company systems secure, reliable, supportable, and aligned with business needs.':mode==='adventure'?'Adventurers and unusual deliveries affect inventory, cash flow, risk, and reputation.':'City rules and commercial rivals change the environment in which C&C operates.';
+ let html=`<div class="panel"><div class="eyebrow">${modeTitle()}</div><h2>${mode==='it'?'The work queue':mode==='adventure'?'Visitors & expeditions':'The civic and commercial landscape'}</h2><p class="muted">${intro}</p>`;
+ if(!e){html+=`<div class="event"><h3>No active ${modeTitle().toLowerCase()} event</h3><p class="muted">This mode has no unresolved event right now. You can work in another mode or advance the shared calendar.</p><button class="primary" id="checkEvent">Check for a new event</button></div>`}
+ else{
+  html+=`<div class="event"><span class="tag">Opened day ${e.created} · unresolved decision</span><h3>${e.title}</h3><p>${e.body}</p><div class="choices">${e.choices.map((c,i)=>`<button class="choice" data-choice="${i}"><strong>${i+1}. ${c.label}</strong><span>${c.detail}</span></button>`).join('')}</div></div>`;
+ }
+ html+='</div>';
+ if(mode==='it')html+=`<div class="panel"><h2>IT dashboard</h2>${meter('Reliability',game.reliability)}${meter('Security posture',game.security)}${meter('Technical debt',100-game.techDebt,'Lower debt is better')}</div>`;
+ if(mode==='adventure')html+=`<div class="panel"><h2>Trade inventory</h2><p>C&C currently tracks <strong>${game.inventory} item lots</strong> across storage and sales. Some lots may require appraisal or special handling.</p><button id="stockBtn">Reconcile one inventory lot (1 day action)</button></div>`;
+ if(mode==='politics')html+=`<div class="panel"><h2>Current pressure points</h2><ul><li>Market: ${game.market}</li><li>Rival: ${game.rival}</li><li>Government: ${game.government}</li><li>Operating reserve: ${game.cash} crowns</li></ul><button id="marketBtn">Conduct merchant outreach (1 day action)</button></div>`;
+ $('modeContent').innerHTML=html;
+ document.querySelectorAll('[data-choice]').forEach(b=>b.addEventListener('click',()=>applyChoice(mode,Number(b.dataset.choice))));
+ const check=$('checkEvent');if(check)check.addEventListener('click',()=>{createEvent(mode,true);render()});
+ const stock=$('stockBtn');if(stock)stock.addEventListener('click',()=>{game.inventory=Math.max(0,game.inventory-1);game.techDebt=clamp(game.techDebt-2,0,100);game.reputation=clamp(game.reputation+1,0,100);game.actionsToday++;log('A stock record was reconciled and the catalog updated.','Trade');save(false);render()});
+ const market=$('marketBtn');if(market)market.addEventListener('click',()=>{game.reputation=clamp(game.reputation+2,0,100);game.cash=Math.max(0,game.cash-2);game.actionsToday++;log('Merchant outreach improves relationships but consumes time and funds.','Trade');save(false);render()});
+}
+function meter(label,val,note=''){return `<div class="small">${label} <strong style="float:right">${val}/100</strong></div><div class="bar"><i style="width:${clamp(val,0,100)}%"></i></div>${note?`<p class="muted small">${note}</p>`:''}`}
+function renderSidebar(){
+ $('worldState').innerHTML=`<p><strong>Government</strong><br><span class="muted">${game.government}</span></p><p><strong>Patron deity nearby</strong><br><span class="muted">${game.deity}</span></p><p><strong>Market</strong><br><span class="muted">${game.market}</span></p><p><strong>Rival</strong><br><span class="muted">${game.rival}</span></p><p><strong>Technical debt</strong><br><span class="muted">${game.techDebt}/100</span></p><p><strong>Inventory lots</strong><br><span class="muted">${game.inventory}</span></p><p><strong>Actions taken today</strong><br><span class="muted">${game.actionsToday}</span></p>`;
+ $('eventLog').innerHTML=game.log.length?game.log.slice(0,8).map(x=>`<div class="log-item"><span class="tag">Day ${x.day} · ${x.type}</span><div class="small">${x.msg}</div></div>`).join(''):'<p class="muted small">No events recorded yet.</p>';
+}
+function render(){renderStats();renderMode();renderSidebar();document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mode===mode)))}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.mode;render()}));
+$('nextDay').addEventListener('click',advanceDay);
+$('saveBtn').addEventListener('click',()=>{save(true);render()});
+$('resetBtn').addEventListener('click',reset);
+if(!load()){game=initialState();log('A new randomized run begins.');ensureEvents();save(false)}
+render();
+})();
+</script>
+</body>
+</html>
